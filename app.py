@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Hadchi li dejà m-gadd l-binôme dyalk (On le garde!)
+# 🚗 L-Dictionnaire dyal les places (Khllito perfectly kima m-gaddo l-binôme dyalk)
 parking_spots = {
     1: {"status": "available", "name": None, "token": None},
     2: {"status": "available", "name": None, "token": None},
@@ -15,7 +15,7 @@ parking_spots = {
 
 active_reservations = {}
 
-# Had la route dejà 3ndkom kat-servi l-index.html direct
+# 🌐 La route principal li kat-7ll l-index.html f l-site web
 @app.route('/')
 def home():
     try:
@@ -25,40 +25,42 @@ def home():
         return f"Erreur chargement index.html: {str(e)}", 500
 
 
-# 🌐 HNA L-ZIYADA L-MOUHIMMA: Had la route hiya li ghadi t-connecta m3a l-ESP32
+# 📡 LA ROUTE L-JDIDA: Hiya li ghadi t-reçoit l-data mn l-ESP32
 @app.route('/api/parking/status', methods=['POST'])
 def update_parking_from_esp32():
     data = request.get_json()
+    
+    # Vérification d l-data
     if not data:
         return jsonify({"status": "error", "message": "No data received"}), 400
         
-    action = data.get('action') # Kat-9ra "entree" wla "sortie"
-    print(f"📡 Reçu de l'ESP32 - Action: {action}")
+    action = data.get('action') # Kat-9ra "entree" (RFID) wla "sortie" (IR)
+    print(f"📡 Reçu de l'ESP32 - Action de la voiture: {action}")
     
-    # 🚗 LOGIQUE D'ENTRÉE: Kat-9leb 3la awwel blassa khawia w t-rdha occupied
+    # 1. ILA KANT L-ACTION = ENTREE (RFID khdam w la barrière tl3at)
     if action == 'entree':
+        # Kat-9lebo 3la awwel blassa khawia (available) mn 1 l 4 bach n-3mrouha
         for spot_id, spot_info in parking_spots.items():
             if spot_info["status"] == "available":
-                spot_info["status"] = "occupied"
-                print(f"🚗 Position {spot_id} est maintenant occupée.")
+                spot_info["status"] = "occupied" # Reddiha 3amra
+                print(f"🚗 Position {spot_id} rj3at msdouda / occupied.")
                 return jsonify({"status": "success", "message": f"Spot {spot_id} occupied"}), 200
         return jsonify({"status": "full", "message": "Parking plein!"}), 200
         
-    # 🍏 LOGIQUE DE SORTIE: Kat-9leb 3la awwel blassa 3mra w t-khwiha (available)
+    # 2. ILA KANT L-ACTION = SORTIE (Capteur IR d l-khroj khdam w la barrière tl3at)
     elif action == 'sortie':
-        # Kat-9lbo b l-3akss bach n-khwio l-places
+        # Kat-9lebo 3la l-places m-3ksin (mn 4 l 1) bach n-khwio l-places li 3amrin
         for spot_id in sorted(parking_spots.keys(), reverse=True):
             if parking_spots[spot_id]["status"] == "occupied":
-                parking_spots[spot_id]["status"] = "available"
-                print(f"🍏 Position {spot_id} est maintenant libre (available).")
+                parking_spots[spot_id]["status"] = "available" # Reddiha khawia
+                print(f"🍏 Position {spot_id} rj3at khawia / available.")
                 return jsonify({"status": "success", "message": f"Spot {spot_id} freed"}), 200
         return jsonify({"status": "already_empty", "message": "Parking déjà vide"}), 200
         
     return jsonify({"status": "error", "message": "Action inconnue"}), 400
 
 
-# (Ila kano 3ndkom des routes khrrin dejà m-gaddinhom tht f app.py bhal dyal les réservations, khllihom kima huma!)
+# Configuration s7i7a dyal l-Port bach Render y-déployer le code direct bla error
 if __name__ == '__main__':
-    # Configuration stable pour Render
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
