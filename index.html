@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SmartPark — Intelligent Parking System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #080c14;
+    --surface: rgba(255,255,255,0.03);
+    --border: rgba(255,255,255,0.07);
+    --accent: #00e5ff;
+    --accent2: #00ff88;
+    --danger: #ff3d6b;
+    --text: #e2e8f0;
+    --muted: rgba(226,232,240,0.4);
+    --glass: rgba(255,255,255,0.04);
+    --glow: 0 0 40px rgba(0,229,255,0.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 10% -10%, rgba(0,229,255,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 110%, rgba(0,255,136,0.05) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,0.012) 60px, rgba(255,255,255,0.012) 61px),
+      repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.012) 60px, rgba(255,255,255,0.012) 61px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .glass {
+    background: var(--glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+  }
+  .glow-accent { box-shadow: 0 0 30px rgba(0,229,255,0.2), 0 0 60px rgba(0,229,255,0.07); }
+  .glow-green  { box-shadow: 0 0 30px rgba(0,255,136,0.2), 0 0 60px rgba(0,255,136,0.07); }
+  .glow-red    { box-shadow: 0 0 30px rgba(255,61,107,0.25), 0 0 60px rgba(255,61,107,0.08); }
+
+  /* Spot card */
+  .spot-card {
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: default;
+  }
+  .spot-card:hover { transform: translateY(-4px); }
+  .spot-card.available { border-color: rgba(0,255,136,0.3); }
+  .spot-card.occupied  { border-color: rgba(255,61,107,0.3); }
+  .spot-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+  }
+  .spot-card.available::after { background: linear-gradient(90deg, transparent, #00ff88, transparent); }
+  .spot-card.occupied::after  { background: linear-gradient(90deg, transparent, #ff3d6b, transparent); }
+
+  .spot-icon {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem;
+    margin: 0 auto 1rem;
+    transition: all 0.5s ease;
+  }
+  .spot-icon.available {
+    background: rgba(0,255,136,0.1);
+    border: 2px solid rgba(0,255,136,0.4);
+    color: #00ff88;
+    box-shadow: 0 0 20px rgba(0,255,136,0.3), inset 0 0 20px rgba(0,255,136,0.05);
+  }
+  .spot-icon.occupied {
+    background: rgba(255,61,107,0.1);
+    border: 2px solid rgba(255,61,107,0.4);
+    color: #ff3d6b;
+    box-shadow: 0 0 20px rgba(255,61,107,0.3), inset 0 0 20px rgba(255,61,107,0.05);
+    animation: pulse-red 2s ease-in-out infinite;
+  }
+  @keyframes pulse-red {
+    0%,100% { box-shadow: 0 0 20px rgba(255,61,107,0.3), inset 0 0 20px rgba(255,61,107,0.05); }
+    50%      { box-shadow: 0 0 35px rgba(255,61,107,0.5), inset 0 0 30px rgba(255,61,107,0.1); }
+  }
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 100px;
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .status-badge.available { background: rgba(0,255,136,0.1); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); }
+  .status-badge.occupied  { background: rgba(255,61,107,0.1); color: #ff3d6b; border: 1px solid rgba(255,61,107,0.3); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; animation: blink 1.4s ease-in-out infinite; }
+  .status-badge.available .status-dot { background: #00ff88; }
+  .status-badge.occupied  .status-dot { background: #ff3d6b; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* Input styles */
+  .smart-input {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .smart-input:focus {
+    border-color: rgba(0,229,255,0.5);
+    box-shadow: 0 0 0 3px rgba(0,229,255,0.08);
+  }
+  .smart-input::placeholder { color: rgba(226,232,240,0.3); }
+  select.smart-input option { background: #0f1623; color: var(--text); }
+
+  /* QR container */
+  #qr-output canvas, #qr-output img {
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Log entries */
+  .log-entry {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:translateX(0); } }
+
+  /* Button */
+  .btn-primary {
+    background: linear-gradient(135deg, #00e5ff, #00c8e0);
+    color: #080c14;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    padding: 0.8rem 1.5rem;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative; overflow: hidden;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,229,255,0.35); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-secondary {
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+  .btn-danger {
+    background: rgba(255,61,107,0.1);
+    color: #ff3d6b;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255,61,107,0.3);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-danger:hover { background: rgba(255,61,107,0.2); }
+
+  /* Top bar scan indicator */
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #00ff88;
+    box-shadow: 0 0 8px #00ff88;
+    animation: blink 1s ease-in-out infinite;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  .stat-card { transition: transform 0.2s; }
+  .stat-card:hover { transform: translateY(-3px); }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  .fade-in { animation: fadeIn 0.5s ease forwards; }
+</style>
+</head>
+<body>
+
+<!-- ======================= HEADER ======================= -->
+<header class="glass sticky top-0 z-50 border-b border-white/5">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#00e5ff22,#00ff8822);border:1px solid rgba(0,229,255,0.3)">
+        <span style="font-size:1.1rem">🅿</span>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight" style="letter-spacing:-0.02em">SmartPark</h1>
+        <p class="mono text-xs" style="color:var(--muted);font-size:0.65rem">INTELLIGENT PARKING SYSTEM v2.1</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 mono text-xs" style="color:var(--muted)">
+        <div class="live-dot"></div>
+        <span>LIVE</span>
+      </div>
+      <div class="mono text-xs px-3 py-1.5 rounded-lg" style="background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--muted)" id="clock">--:--:--</div>
+    </div>
+  </div>
+</header>
+
+<!-- ======================= MAIN ======================= -->
+<main class="max-w-7xl mx-auto px-6 py-8 relative z-10 space-y-8">
+
+  <!-- Stats Row -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="stats-row">
+    <div class="glass rounded-2xl p-4 stat-card">
+      <p class="mono text-xs mb-1" style="color:var(--muted);letter-spacing:0.08em">TOTAL SPOTS</p>
+      <p class="text-3xl font-bold" style="color:var(--accent)">4</p>
+    </div>
+    <div class="glass rounded-2xl p-4 stat-card">
+      <p class="mono text-xs mb-1" style="color:var(--muted);letter-spacing:0.08em">AVAILABLE</p>
+      <p class="text-3xl font-bold" style="color:var(--accent2)" id="stat-available">4</p>
+    </div>
+    <div class="glass rounded-2xl p-4 stat-card">
+      <p class="mono text-xs mb-1" style="color:var(--muted);letter-spacing:0.08em">OCCUPIED</p>
+      <p class="text-3xl font-bold" style="color:var(--danger)" id="stat-occupied">0</p>
+    </div>
+    <div class="glass rounded-2xl p-4 stat-card">
+      <p class="mono text-xs mb-1" style="color:var(--muted);letter-spacing:0.08em">OCCUPANCY</p>
+      <p class="text-3xl font-bold" style="color:var(--text)" id="stat-pct">0%</p>
+    </div>
+  </div>
+
+  <!-- Spots Grid -->
+  <section>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-bold tracking-tight">Parking Bay Overview</h2>
+      <span class="mono text-xs px-2 py-1 rounded" style="background:rgba(255,255,255,0.04);color:var(--muted)">ZONE A — LEVEL 1</span>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="spots-grid"></div>
+  </section>
+
+  <!-- Lower Section: Book + Log -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- Book a Spot -->
+    <div class="glass rounded-2xl p-6 space-y-5">
+      <div class="flex items-center gap-3 mb-1">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm" style="background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.2)">📋</div>
+        <div>
+          <h2 class="text-lg font-bold">Reserve a Spot</h2>
+          <p class="text-xs" style="color:var(--muted)">Book now, scan on arrival</p>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="mono text-xs mb-1.5 block" style="color:var(--muted);letter-spacing:0.08em">FULL NAME</label>
+          <input id="f-name" class="smart-input" type="text" placeholder="e.g. Ahmed Benali"/>
+        </div>
+        <div>
+          <label class="mono text-xs mb-1.5 block" style="color:var(--muted);letter-spacing:0.08em">PREFERRED SPOT</label>
+          <select id="f-spot" class="smart-input">
+            <option value="">— Auto Assign —</option>
+            <option value="1">Spot 1</option>
+            <option value="2">Spot 2</option>
+            <option value="3">Spot 3</option>
+            <option value="4">Spot 4</option>
+          </select>
+        </div>
+
+        <button class="btn-primary w-full mt-2" onclick="reserveSpot()">⚡ Generate QR &amp; Reserve</button>
+      </div>
+
+      <!-- QR Result -->
+      <div id="qr-result" class="hidden rounded-xl p-4 space-y-3" style="background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.15)">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="mono text-xs" style="color:var(--muted);letter-spacing:0.08em">BOOKING TOKEN</p>
+            <p class="text-xl font-bold mt-0.5" id="token-display" style="color:var(--accent);letter-spacing:0.05em"></p>
+          </div>
+          <span class="status-badge available">✓ Confirmed</span>
+        </div>
+        <div id="qr-output" class="flex justify-center py-2"></div>
+        <p class="text-center mono text-xs" style="color:var(--muted)">Scan this QR at the entry gate</p>
+        <div class="text-xs space-y-1 pt-1" style="color:var(--muted)">
+          <p id="qr-name"></p>
+          <p id="qr-spotinfo"></p>
+        </div>
+        <button class="btn-secondary w-full text-xs" onclick="simulateESP32Scan()">🔌 Simulate ESP32 QR Scan</button>
+      </div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="glass rounded-2xl p-6 flex flex-col">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm" style="background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.2)">📡</div>
+          <div>
+            <h2 class="text-lg font-bold">Activity Log</h2>
+            <p class="text-xs" style="color:var(--muted)">Real-time event stream</p>
+          </div>
+        </div>
+        <button class="btn-secondary text-xs" onclick="clearLog()">Clear</button>
+      </div>
+      <div id="activity-log" class="space-y-2 flex-1 overflow-y-auto max-h-96 pr-1"></div>
+      <div id="log-empty" class="flex-1 flex flex-col items-center justify-center py-10 text-center" style="color:var(--muted)">
+        <span class="text-4xl mb-3 block">📭</span>
+        <p class="text-sm">No events yet.</p>
+        <p class="text-xs mt-1">Activity appears here in real time.</p>
+      </div>
+    </div>
+
+  </div>
+
+
+</main>
+
+<script>
+// ============================================================
+//  SMARTPARK — Core Application State & Config
+// ============================================================
+const SERVER_URL = window.location.origin; // Dynamic IP dial l-server
+let spots = [];
+let currentReservation = null;
+
+// ============================================================
+//  CLOCK
+// ============================================================
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ============================================================
+//  RENDER SPOTS (Dynamic mn l-Server)
+// ============================================================
+function renderSpots() {
+  const grid = document.getElementById('spots-grid');
+  grid.innerHTML = '';
+  
+  let occupiedCount = 0;
+
+  spots.forEach(spot => {
+    const isOccupied = spot.status === 'occupied';
+    if (isOccupied) occupiedCount++;
+
+    const card = document.createElement('div');
+    card.className = `spot-card glass rounded-2xl p-5 text-center ${spot.status}`;
+    if (!isOccupied) card.classList.add('glow-green');
+    else card.classList.add('glow-red');
+
+    const sinceHtml = isOccupied && spot.since
+      ? `<p class="mono mt-2" style="font-size:0.62rem;color:rgba(255,61,107,0.7)">Since ${spot.since}</p>`
+      : `<p class="mono mt-2" style="font-size:0.62rem;color:rgba(0,255,136,0.5)">Ready</p>`;
+
+    const nameHtml = spot.name
+      ? `<p class="text-xs mt-1 truncate" style="color:var(--muted)">👤 ${spot.name}</p>`
+      : '';
+
+    // Action buttons t-ṣifṭ l-Server d ssa7 mnin t-cliqui
+    const actionBtn = isOccupied
+      ? `<button class="btn-danger mt-3 w-full text-xs" onclick="releaseSpotServer(${spot.id})">Release</button>`
+      : `<button class="btn-secondary mt-3 w-full text-xs" onclick="quickOccupyServer(${spot.id})">Simulate Arrive</button>`;
+
+    card.innerHTML = `
+      <div class="spot-icon ${spot.status} mx-auto">${!isOccupied ? '🟢' : '🚗'}</div>
+      <p class="mono text-xs font-bold" style="letter-spacing:0.1em;color:var(--muted)">SPOT</p>
+      <p class="text-3xl font-extrabold mt-0.5" style="letter-spacing:-0.03em">${spot.id}</p>
+      <div class="flex justify-center mt-2">
+        <span class="status-badge ${spot.status}">
+          <span class="status-dot"></span>
+          ${!isOccupied ? 'Available' : 'Occupied'}
+        </span>
+      </div>
+      ${sinceHtml}
+      ${nameHtml}
+      ${actionBtn}
+    `;
+    grid.appendChild(card);
+  });
+
+  // Update l-fo9aniyin dial l-Estatat
+  const availableCount = spots.length - occupiedCount;
+  document.getElementById('stat-available').textContent = availableCount;
+  document.getElementById('stat-occupied').textContent = occupiedCount;
+  document.getElementById('stat-pct').textContent = spots.length ? Math.round((occupiedCount / spots.length) * 100) + '%' : '0%';
+}
+
+// ============================================================
+//  FETCH LIVE STATUS (Kol 1.5 sanya)
+// ============================================================
+function fetchParkingStatus() {
+  fetch(`${SERVER_URL}/api/status`)
+    .then(res => res.json())
+    .then(data => {
+      // Re-map Python dict l JavaScript array bāsh n-rendriwha
+      let updatedSpots = [];
+      for (let id in data) {
+        updatedSpots.push({
+          id: parseInt(id),
+          status: data[id].status,
+          name: data[id].name,
+          token: data[id].token,
+          since: data[id].status === 'occupied' ? (spots.find(s => s.id === parseInt(id))?.since || new Date().toLocaleTimeString('en-GB')) : null
+        });
+      }
+      // Khallih i-bdel l-UI ghir ila t-bdel l-data f server
+      if (JSON.stringify(spots) !== JSON.stringify(updatedSpots)) {
+        spots = updatedSpots;
+        renderSpots();
+      }
+    })
+    .catch(err => console.log("Waiting for Python server..."));
+}
+
+// ============================================================
+//  RESERVE SPOT + GENERATE QR
+// ============================================================
+function reserveSpot() {
+  const name = document.getElementById('f-name').value.trim();
+  const spotPref = document.getElementById('f-spot').value;
+
+  if (!name) { alert('Please enter your full name.'); return; }
+
+  // Khtar dynamic spot automatic ila madarnach preferred
+  let targetSpot = spotPref;
+  if (!targetSpot) {
+    const freeSpot = spots.find(s => s.status === 'available');
+    if (!freeSpot) { alert('All spots are currently occupied!'); return; }
+    targetSpot = freeSpot.id;
+  } else {
+    const s = spots.find(sp => sp.id === parseInt(spotPref));
+    if (s && s.status === 'occupied') { alert(`Spot ${spotPref} is full!`); return; }
+  }
+
+  // Token format 'PARK-XXXX'
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let token = 'PARK-';
+  for (let i = 0; i < 4; i++) token += chars[Math.floor(Math.random() * chars.length)];
+
+  const time = new Date().toLocaleTimeString('en-GB');
+
+  // Safi ṣifṭ l-reservation l Python backend
+  fetch(`${SERVER_URL}/api/reserve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, spot: targetSpot, name })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      currentReservation = { token, name, spot: targetSpot };
+
+      document.getElementById('qr-result').classList.remove('hidden');
+      document.getElementById('token-display').textContent = token;
+      document.getElementById('qr-name').textContent = '👤 ' + name;
+      document.getElementById('qr-spotinfo').textContent = '🅿 Spot ' + targetSpot;
+
+      // QR Code fih ghir l-token bāsh l-ESP32 / GM65 i-9rah f sanya
+      const qrContainer = document.getElementById('qr-output');
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, {
+        text: token,
+        width: 160,
+        height: 160,
+        colorDark: '#00e5ff',
+        colorLight: '#080c14',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      addLog('booked', `Reservation confirmed — Spot ${targetSpot} for ${name}`, time, token);
+    }
+  })
+  .catch(err => alert("Error: Can't connect to Flask server!"));
+}
+
+// ============================================================
+//  SIMULATE ACCIONS DIRECT L L-SERVER
+// ============================================================
+function simulateESP32Scan() {
+  if (!currentReservation) { alert('No active reservation to scan.'); return; }
+
+  const { token, spot } = currentReservation;
+  const scanTime = new Date().toLocaleTimeString('en-GB');
+
+  fetch(`${SERVER_URL}/api/scan-qr`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      addLog('scanned', `ESP32 scanned QR — ${token} → Spot ${spot}`, scanTime, token);
+      document.getElementById('qr-result').classList.add('hidden'); // khbi QR 
+      currentReservation = null;
+      fetchParkingStatus(); // Refresh dynamic l-site
+    } else {
+      addLog('error', `Scan rejected: ${data.message}`, scanTime, token);
+    }
+  });
+}
+
+function quickOccupyServer(spotId) {
+  // Simuler dkhoul bla reservation (mathalan RFID card direct)
+  const fakeUID = Math.floor(100000 + Math.random() * 900000);
+  fetch(`${SERVER_URL}/api/scan-rfid`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uid: fakeUID.toString() })
+  })
+  .then(() => {
+    addLog('occupied', `Spot ${spotId} occupied via live sensor`, new Date().toLocaleTimeString('en-GB'), 'RFID');
+    fetchParkingStatus();
+  });
+}
+
+function releaseSpotServer(spotId) {
+  // Simuler khrouj (IR Sensor dial l-khrouj)
+  fetch(`${SERVER_URL}/api/exit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ spot: spotId })
+  })
+  .then(() => {
+    addLog('released', `Spot ${spotId} released by infrared sensor`, new Date().toLocaleTimeString('en-GB'), null);
+    fetchParkingStatus();
+  });
+}
+
+// ============================================================
+//  ACTIVITY LOG MANAGEMENT
+// ============================================================
+function addLog(type, message, time, token) {
+  document.getElementById('log-empty').style.display = 'none';
+  const log = document.getElementById('activity-log');
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+
+  const icons  = { occupied: '🚗', released: '✅', booked: '📋', scanned: '📡', error: '⚠️' };
+  const colors = { occupied: '#ff3d6b', released: '#00ff88', booked: '#00e5ff', scanned: '#a78bfa', error: '#fbbf24' };
+  
+  el.innerHTML = `
+    <span class="text-base mt-0.5">${icons[type] || '📌'}</span>
+    <div class="flex-1 min-w-0">
+      <p class="text-sm font-medium truncate" style="color:var(--text)">${message}</p>
+      <div class="flex items-center gap-2 mt-0.5">
+        <span class="mono text-xs" style="color:var(--muted)">${time}</span>
+        ${token ? `<span class="mono text-xs px-1.5 py-0.5 rounded" style="background:rgba(0,229,255,0.08);color:var(--accent);font-size:0.6rem">${token}</span>` : ''}
+      </div>
+    </div>
+    <span class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style="background:${colors[type]};box-shadow:0 0 6px ${colors[type]}"></span>
+  `;
+  log.prepend(el);
+}
+
+function clearLog() {
+  document.getElementById('activity-log').innerHTML = '';
+  document.getElementById('log-empty').style.display = 'flex';
+}
+
+// ============================================================
+//  LOOP DIAL L-KHEDMA
+// ============================================================
+setInterval(fetchParkingStatus, 1500); // d9a dynamic kol 1.5 sanya
+fetchParkingStatus(); // render awel marra
+addLog('scanned', 'System online — linked to Python Core', new Date().toLocaleTimeString('en-GB'), null);
+
+</script>
+</body>
+</html>
